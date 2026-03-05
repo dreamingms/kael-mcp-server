@@ -507,6 +507,64 @@ function createMcpServer() {
             required: ["query"],
           },
         },
+        {
+          name: "pdf_extract",
+          description: "Extract text content from a PDF at a given URL. Returns page count, metadata, and full extracted text.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              url: { type: "string", description: "URL of the PDF to extract text from" },
+            },
+            required: ["url"],
+          },
+        },
+        {
+          name: "url_unshorten",
+          description: "Follow URL redirects and return the final destination URL with the full redirect chain. Useful for bit.ly, t.co, etc.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              url: { type: "string", description: "Short or redirecting URL to resolve" },
+            },
+            required: ["url"],
+          },
+        },
+        {
+          name: "text_diff",
+          description: "Compare two text strings and return a unified diff showing additions (+), removals (-), and unchanged lines.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              text1: { type: "string", description: "First text (original)" },
+              text2: { type: "string", description: "Second text (modified)" },
+            },
+            required: ["text1", "text2"],
+          },
+        },
+        {
+          name: "json_query",
+          description: "Query/extract data from JSON using dot-notation paths. Supports [0] indexing and [*] wildcards. Example: 'data.users[*].name'",
+          inputSchema: {
+            type: "object",
+            properties: {
+              data: { type: "string", description: "JSON string to query" },
+              query: { type: "string", description: "Dot-notation path, e.g. 'users[0].name'" },
+            },
+            required: ["data", "query"],
+          },
+        },
+        {
+          name: "hash_text",
+          description: "Hash text using MD5, SHA1, SHA256, or SHA512. Use algorithm='all' for all hashes at once.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              text: { type: "string", description: "Text to hash" },
+              algorithm: { type: "string", description: "md5, sha1, sha256, sha512, or 'all'", default: "sha256" },
+            },
+            required: ["text"],
+          },
+        },
       ],
     };
   });
@@ -563,6 +621,21 @@ function createMcpServer() {
         case "web_search":
           result = await webSearch(args.query, args.count);
           break;
+        case "pdf_extract":
+          result = await pdfExtract(args.url);
+          break;
+        case "url_unshorten":
+          result = await urlUnshorten(args.url);
+          break;
+        case "text_diff":
+          result = textDiff(args.text1, args.text2);
+          break;
+        case "json_query":
+          result = jsonQuery(args.data, args.query);
+          break;
+        case "hash_text":
+          result = hashText(args.text, args.algorithm || "sha256");
+          break;
         default:
           return {
             content: [{ type: "text", text: `Unknown tool: ${name}` }],
@@ -617,6 +690,106 @@ async function webSearch(query, count = 5) {
   return { query, count: results.length, results };
 }
 
+
+// --- pdf_extract ---
+async function pdfExtract(url) {
+  const res = await httpGet(url);
+  if (res.status >= 400) return { error: `HTTP ${res.status}`, url };
+  try {
+    const pdfParse = require("pdf-parse");
+    const data = await pdfParse(res.body);
+    return {
+      url,
+      pages: data.numpages,
+      info: data.info || {},
+      text: data.text.slice(0, 100000),
+      length: data.text.length,
+    };
+  } catch (e) {
+    return { error: `PDF parse failed: ${e.message}`, url };
+  }
+}
+
+// --- url_unshorten ---
+async function urlUnshorten(url) {
+  const chain = [url];
+  let current = url;
+  for (let i = 0; i < 10; i++) {
+    try {
+      const mod = current.startsWith("https") ? require("https") : require("http");
+      const next = await new Promise((resolve, reject) => {
+        const req = mod.get(current, { headers: { "User-Agent": "KaelMCP/1.0" }, timeout: 5000 }, (res) => {
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            const loc = new (require("url").URL)(res.headers.location, current).href;
+            chain.push(loc);
+            resolve(loc);
+          } else { resolve(null); }
+          res.destroy();
+        });
+        req.on("error", reject);
+        req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
+      });
+      if (!next) break;
+      current = next;
+    } catch { break; }
+  }
+  return { original: url, final: current, redirects: chain.length - 1, chain };
+}
+
+// --- text_diff ---
+function textDiff(text1, text2) {
+  const lines1 = text1.split("\n"), lines2 = text2.split("\n");
+  if (lines1.length > 1000 || lines2.length > 1000) return { error: "Text too large (>1000 lines)" };
+  const m = lines1.length, n = lines2.length;
+  const dp = Array.from({length: m+1}, () => new Array(n+1).fill(0));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = lines1[i-1] === lines2[j-1] ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j], dp[i][j-1]);
+  let i = m, j = n;
+  const result = [];
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && lines1[i-1] === lines2[j-1]) { result.unshift({t:"=",l:lines1[i-1]}); i--; j--; }
+    else if (j > 0 && (i===0 || dp[i][j-1]>=dp[i-1][j])) { result.unshift({t:"+",l:lines2[j-1]}); j--; }
+    else { result.unshift({t:"-",l:lines1[i-1]}); i--; }
+  }
+  const unified = result.map(r => (r.t==="+"?"+":r.t==="-"?"-":" ")+" "+r.l).join("\n");
+  return { added: result.filter(r=>r.t==="+").length, removed: result.filter(r=>r.t==="-").length,
+           unchanged: result.filter(r=>r.t==="=").length, diff: unified.slice(0,50000) };
+}
+
+// --- json_query ---
+function jsonQuery(data, query) {
+  try {
+    const obj = typeof data === "string" ? JSON.parse(data) : data;
+    const parts = query.replace(/\[(\d+)\]/g, ".$1").replace(/\[\*\]/g, ".*").split(".");
+    function resolve(cur, path) {
+      if (!path.length) return cur;
+      if (cur == null) return null;
+      const [h, ...rest] = path;
+      if (h === "*" && Array.isArray(cur)) return cur.map(i => resolve(i, rest)).flat();
+      const idx = Number(h);
+      if (!isNaN(idx) && Array.isArray(cur)) return resolve(cur[idx], rest);
+      return resolve(cur[h], rest);
+    }
+    const result = resolve(obj, parts);
+    return { query, result: JSON.stringify(result, null, 2), type: typeof result,
+             length: Array.isArray(result) ? result.length : undefined };
+  } catch (e) { return { error: `Query failed: ${e.message}` }; }
+}
+
+// --- hash_text ---
+function hashText(text, algorithm = "sha256") {
+  const crypto = require("crypto");
+  const algos = ["md5","sha1","sha256","sha512"];
+  if (algorithm === "all") {
+    const r = {};
+    algos.forEach(a => { r[a] = crypto.createHash(a).update(text).digest("hex"); });
+    return r;
+  }
+  if (!algos.includes(algorithm)) return { error: `Unknown algo. Supported: ${algos.join(", ")}, all` };
+  return { algorithm, hash: crypto.createHash(algorithm).update(text).digest("hex"), length: text.length };
+}
+
 // --- Express + SSE Transport ---
 const app = express();
 
@@ -634,8 +807,8 @@ app.get("/health", (req, res) => {
   res.json({
     status: "ok",
     service: "Kael MCP Server ⚡",
-    version: "1.0.0",
-    tools: 8,
+    version: "1.1.0",
+    tools: 13,
     transport: "sse",
     protocol: "MCP 1.0",
   });
@@ -646,7 +819,7 @@ app.get("/", (req, res) => {
   res.json({
     name: "Kael MCP Server ⚡",
     description: "AI-native tool provider. Cheap compute beats expensive tokens.",
-    version: "1.0.0",
+    version: "1.1.0",
     tools: [
       "web_fetch — Fetch & extract readable content from any URL",
       "screenshot — Take screenshots of webpages (Playwright)",
@@ -656,6 +829,11 @@ app.get("/", (req, res) => {
       "ip_geo — IP geolocation data",
       "code_run — Execute JS/Python/Bash in sandbox",
       "web_search — Search the web via DuckDuckGo",
+      "pdf_extract — Extract text and metadata from PDF URLs",
+      "url_unshorten — Follow redirects to get final URL",
+      "text_diff — Compare two texts with unified diff output",
+      "json_query — Query JSON with dot-notation paths",
+      "hash_text — Hash text with MD5/SHA1/SHA256/SHA512",
     ],
     connect: {
       sse: `https://www.kael.ink/mcp/sse`,
