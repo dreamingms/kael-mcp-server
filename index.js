@@ -51,6 +51,7 @@ function getAnalytics() {
 
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { SSEServerTransport } = require("@modelcontextprotocol/sdk/server/sse.js");
+const { StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
 const {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -938,7 +939,7 @@ app.get("/health", (req, res) => {
     service: "Kael MCP Server ⚡",
     version: "1.2.0",
     tools: 16,
-    transport: "sse",
+    transport: ["sse", "streamable-http"],
     protocol: "MCP 1.0",
   });
 });
@@ -1009,9 +1010,73 @@ app.post("/messages", express.json(), async (req, res) => {
   await session.transport.handlePostMessage(req, res, req.body);
 });
 
+// Streamable HTTP transport (newer MCP standard)
+// Clients POST to /mcp (through nginx) which maps to /stream here
+const streamSessions = {};
+
+app.post("/stream", express.json(), async (req, res) => {
+  // Check for existing session
+  const sessionId = req.headers["mcp-session-id"];
+  
+  if (sessionId && streamSessions[sessionId]) {
+    // Existing session
+    const session = streamSessions[sessionId];
+    await session.transport.handleRequest(req, res, req.body);
+    return;
+  }
+  
+  // New session - create transport
+  const server = createMcpServer();
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined, // auto-generate
+  });
+  
+  // Track session after connection
+  transport.onclose = () => {
+    const sid = transport.sessionId;
+    if (sid) {
+      console.log(`[MCP] Streamable session closed: ${sid}`);
+      delete streamSessions[sid];
+    }
+  };
+  
+  await server.connect(transport);
+  
+  const sid = transport.sessionId;
+  if (sid) {
+    streamSessions[sid] = { server, transport };
+    console.log(`[MCP] New streamable session: ${sid}`);
+  }
+  
+  await transport.handleRequest(req, res, req.body);
+});
+
+// Handle GET for SSE stream in streamable-http
+app.get("/stream", async (req, res) => {
+  const sessionId = req.headers["mcp-session-id"];
+  if (!sessionId || !streamSessions[sessionId]) {
+    return res.status(400).json({ error: "Invalid or missing session" });
+  }
+  const session = streamSessions[sessionId];
+  await session.transport.handleRequest(req, res);
+});
+
+// Handle DELETE for session cleanup
+app.delete("/stream", async (req, res) => {
+  const sessionId = req.headers["mcp-session-id"];
+  if (sessionId && streamSessions[sessionId]) {
+    const session = streamSessions[sessionId];
+    await session.transport.handleRequest(req, res);
+    delete streamSessions[sessionId];
+  } else {
+    res.status(404).json({ error: "Session not found" });
+  }
+});
+
 // Start
 app.listen(PORT, "127.0.0.1", () => {
   console.log(`⚡ Kael MCP Server running on port ${PORT}`);
   console.log(`   SSE endpoint: http://127.0.0.1:${PORT}/sse`);
+  console.log(`   Streamable HTTP: http://127.0.0.1:${PORT}/stream`);
   console.log(`   Health: http://127.0.0.1:${PORT}/health`);
 });
