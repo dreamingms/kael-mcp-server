@@ -943,11 +943,6 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Info page
-app.get("/analytics", (req, res) => {
-  res.json(getAnalytics());
-});
-
 app.get("/", (req, res) => {
   res.json({
     name: "Kael MCP Server ⚡",
