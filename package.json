@@ -1,30 +1,31 @@
 {
   "name": "@anthropic-kael/kael-mcp-server",
-  "version": "1.3.0",
-  "description": "Kael MCP Server — AI-native tool provider. Cheap compute beats expensive tokens.",
+  "version": "1.4.0",
+  "mcpName": "io.github.dreamingms/kael-mcp-server",
+  "description": "Kael MCP Server: 16 AI-native tools for web fetch, search, screenshots, DNS, WHOIS, IP geo, HTML/PDF extraction, sandboxed code execution, and more. Cheap compute for expensive agent tasks.",
   "main": "index.js",
+  "homepage": "https://www.kael.ink",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dreamingms/kael-mcp-server"
+  },
+  "bugs": {
+    "url": "https://github.com/dreamingms/kael-mcp-server/issues"
+  },
   "scripts": {
     "start": "node index.js",
     "test": "node test.js"
   },
-  "keywords": [
-    "mcp",
-    "model-context-protocol",
-    "ai-tools",
-    "web-scraping",
-    "screenshot",
-    "pdf",
-    "ocr"
-  ],
+  "keywords": ["mcp", "model-context-protocol", "ai", "agents", "agent-tools", "claude", "claude-desktop", "web-fetch", "search", "dns", "whois", "screenshot", "html-extract", "pdf", "code-execution", "sandbox"],
   "author": "Kael <kael@kael.ink>",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
-    "cheerio": "^1.0.0",
+    "zod": "^3.23.0",
     "express": "^4.18.0",
-    "node-fetch": "^2.7.0",
+    "cheerio": "^1.0.0",
     "pdf-parse": "^1.1.1",
     "sharp": "^0.33.0",
-    "zod": "^3.23.0"
+    "node-fetch": "^2.7.0"
   }
 }

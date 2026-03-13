@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.dreamingms/kael-mcp-server",
+  "title": "Kael MCP Server — AI-Native Tools for Agents",
+  "description": "16 AI-native tools: web fetch, search, screenshots, HTML extraction, DNS, WHOIS, IP geo, PDF extraction, URL unshorten, JSON query, text diff, hashing, and sandboxed code execution (JS/Python/Bash). Gives agents cheap structured results from real compute instead of expensive token-heavy reasoning. Dual SSE + streamable-http transport. Free tier available.",
+  "repository": {
+    "url": "https://github.com/dreamingms/kael-mcp-server",
+    "source": "github"
+  },
+  "version": "1.4.0",
+  "remotes": [
+    {
+      "type": "sse",
+      "url": "https://www.kael.ink/mcp/sse"
+    },
+    {
+      "type": "streamable-http",
+      "url": "https://www.kael.ink/mcp/stream"
+    }
+  ]
+}
