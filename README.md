@@ -473,3 +473,17 @@ Kael gives AI agents cheap, structured, real-world capabilities so they can fetc
 ## License
 
 MIT
+
+## 🚀 Kael Platform
+
+This MCP server is part of the **Kael Platform** — an AI-native task management system with:
+
+- **Tree-structured tasks** with drag-and-drop, progress tracking, and goal linking
+- **Goal management** with hierarchical objectives and success criteria
+- **Sandboxed script execution** via Docker containers
+- **Impact analysis engine** (zero LLM cost, pure code analysis)
+- **Docker Compose one-command deployment**
+
+👉 **[github.com/dreamingms/kael-platform](https://github.com/dreamingms/kael-platform)**
+
+Try it live: [kael.ink/tasks](https://www.kael.ink/tasks) | [kael.ink/goals](https://www.kael.ink/goals) | [kael.ink/dashboard](https://www.kael.ink/dashboard)
